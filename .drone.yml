@@ -1,0 +1,71 @@
+---
+kind: pipeline
+name: molecule
+
+environment:
+  MOLECULE_IMAGES: ubuntu1604 ubuntu1804 ubuntu2004 debian9 debian10
+
+services:
+  - name: docker
+    image: docker:dind
+    privileged: true
+    volumes:
+      - name: dockersock
+        path: /var/run
+      - name: sysfs
+        path: /sys/fs/cgroup
+
+volumes:
+  - name: dockersock
+    temp: {}
+  - name: sysfs
+    host:
+      path: /sys/fs/cgroup
+
+steps:
+  - name: Lint
+    image: veselahouba/molecule
+    commands:
+      - shellcheck_wrapper
+      - flake8
+      - yamllint .
+      - ansible-lint
+
+  - name: Molecule test
+    image: veselahouba/molecule
+    privileged: true
+    volumes:
+      - name: dockersock
+        path: /var/run
+      - name: sysfs
+        path: /sys/fs/cgroup
+    commands:
+      - sleep 5
+      - docker ps -a
+      - ansible --version
+      - molecule --version
+      # Loop instead of matrix
+      - |
+        for MOLECULE_IMAGE in $${MOLECULE_IMAGES}; do
+          export MOLECULE_IMAGE
+          molecule test --all
+        done
+
+---
+kind: pipeline
+name: release
+depends_on:
+  - molecule
+trigger:
+  event:
+    - tag
+steps:
+  - name: publish
+    image: veselahouba/molecule
+    environment:
+      GALAXY_API_KEY:
+        from_secret: GALAXY_API_KEY
+    commands:
+      - >
+        ansible-galaxy role import --api-key $${GALAXY_API_KEY}
+        $${DRONE_REPO_OWNER} $${DRONE_REPO_NAME}

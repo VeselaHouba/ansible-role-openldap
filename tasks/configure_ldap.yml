@@ -1,0 +1,93 @@
+---
+- name: Create the directories for ldap domain
+  file:
+    path: "/var/lib/ldap/{{ openldap_server_domain }}/"
+    state: directory
+    owner: "{{ openldap_server_user }}"
+    group: "{{ openldap_server_user }}"
+
+- block:
+    - name: Create the directory for ldap certificates
+      file:
+        path: "{{ openldap_server_app_path }}/certs/"
+        state: directory
+        owner: "{{ openldap_server_user }}"
+        group: "{{ openldap_server_user }}"
+
+    - name: Generate the private key for certificate request
+      command: openssl genrsa -des3 -passout pass:password -out my1.key 1024
+      args:
+        chdir: "{{ openldap_server_app_path }}/certs/"
+        creates: "{{ openldap_server_app_path }}/certs/my1.key"
+      become: true
+      become_user: "{{ openldap_server_user }}"
+
+    - name: Strip the passphrase from the key
+      command: openssl rsa -in my1.key -passin pass:password -out my.key
+      args:
+        chdir: "{{ openldap_server_app_path }}/certs/"
+        creates: "{{ openldap_server_app_path }}/certs/my.key"
+      become: true
+      become_user: "{{ openldap_server_user }}"
+
+    - name: Create and sign the the new certificate
+      command: "openssl req -new -x509 -subj
+        '/C={{ openldap_server_country }}\
+        /ST={{ openldap_server_state }}\
+        /L={{ openldap_server_location }}\
+        /O={{ openldap_server_organization }}\
+        /CN={{ ansible_hostname }}/'
+        -days 3650 -key my.key -out cert.crt -extensions v3_ca"
+      args:
+        chdir: "{{ openldap_server_app_path }}/certs/"
+        creates: "{{ openldap_server_app_path }}/certs/cert.crt"
+      become: true
+      become_user: "{{ openldap_server_user }}"
+  when: openldap_server_generate_cert
+
+- name: copy the supporting files
+  copy:
+    src: slapd
+    dest: /etc/default/slapd
+    mode: 0755
+  when: openldap_server_enable_ssl
+  notify: restart slapd
+
+- name: Force all handlers to execute now
+  meta: flush_handlers
+
+- name: Make sure slapd is enabled and running
+  systemd:
+    name: slapd
+    state: started
+    enabled: true
+
+- name: Copy the template for creating base dn
+  template:
+    src: "{{ openldap_server_ldif }}"
+    dest: /tmp/
+  register: result
+
+- name: add the base domain
+  shell: >
+    ldapadd -x -D
+    "cn=Manager,
+    dc={{ openldap_server_domain.split('.')[0] }},
+    dc={{ openldap_server_domain.split('.')[1] }}"
+    -H ldapi:///
+    -w {{ openldap_server_rootpw }}
+    -f {{ result.dest|default(result.path) }} &&
+    touch {{ openldap_server_app_path }}/{{ openldap_server_domain }}_created
+  args:
+    creates: "{{ openldap_server_app_path }}/{{ openldap_server_domain }}_created"
+
+- name: Add regular cleaning
+  cron:
+    name: Removed unused ldap archives
+    user: root
+    cron_file: ldap_archive
+    job: /usr/bin/db_checkpoint -1 && /usr/bin/db_archive -d -h /var/lib/ldap/{{ openldap_server_domain }}
+    minute: '30'
+    hour: '3'
+    weekday: '5'
+  when: openldap_server_autoclean

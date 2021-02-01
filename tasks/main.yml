@@ -1,0 +1,6 @@
+---
+- name: Install ldap
+  include_tasks: install_ldap.yml
+
+- name: Configure ldap
+  include_tasks: configure_ldap.yml
