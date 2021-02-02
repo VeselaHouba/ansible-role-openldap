@@ -1,13 +1,20 @@
 ---
-- name: Install the openldap and required Packages for Debian
+- name: Install the openldap and required packages
   apt:
     name:
       - slapd
       - ldap-utils
-      - python-selinux
       - openssl
       - db-util
     update_cache: true
+
+- name: Install the openldap and required packages for legacy distros
+  apt:
+    name:
+      - python-selinux
+  when:
+    - ansible_distribution == 'Ubuntu'
+    - ansible_distribution_major_version|int < 20
 
 - name: Install cron when needed
   apt:
