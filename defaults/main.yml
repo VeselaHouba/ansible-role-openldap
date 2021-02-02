@@ -16,6 +16,10 @@ openldap_server_docker_mode: false
 
 # Cleanup old log.* files by default
 openldap_server_autoclean: true
+openldap_server_autoclean_cron:
+  hour: '3'
+  minute: '30'
+  weekday: '5'
 
 # SSL-related stuff
 openldap_server_enable_ssl: false

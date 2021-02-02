@@ -15,3 +15,10 @@ def test_ldap_service_is_running(host):
     with host.sudo():
         assert host.service('slapd.service').is_enabled
         assert host.service('slapd.service').is_running
+
+
+def test_ldap_cron(host):
+    cronfile = host.file("/etc/cron.d/ldap_archive")
+    assert cronfile.exists
+    assert cronfile.contains('/usr/bin/db_archive')
+    assert cronfile.contains('20 2')

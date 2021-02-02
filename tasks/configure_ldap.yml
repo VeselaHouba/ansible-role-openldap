@@ -90,7 +90,7 @@
     user: root
     cron_file: ldap_archive
     job: /usr/bin/db_checkpoint -1 && /usr/bin/db_archive -d -h /var/lib/ldap/{{ openldap_server_domain }}
-    minute: '30'
-    hour: '3'
-    weekday: '5'
+    minute: "{{ openldap_server_autoclean_cron.minute|default(omit) }}"
+    hour: "{{ openldap_server_autoclean_cron.hour|default(omit) }}"
+    weekday: "{{ openldap_server_autoclean_cron.weekday|default(omit) }}"
   when: openldap_server_autoclean
