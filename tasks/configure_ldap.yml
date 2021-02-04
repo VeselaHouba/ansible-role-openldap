@@ -3,6 +3,7 @@
   file:
     path: "/var/lib/ldap/{{ openldap_server_domain }}/"
     state: directory
+    mode: 0700
     owner: "{{ openldap_server_user }}"
     group: "{{ openldap_server_user }}"
 
@@ -11,6 +12,7 @@
       file:
         path: "{{ openldap_server_app_path }}/certs/"
         state: directory
+        mode: 0700
         owner: "{{ openldap_server_user }}"
         group: "{{ openldap_server_user }}"
 
@@ -64,6 +66,7 @@
 
 - name: Copy the template for creating base dn
   template:
+    mode: 0600
     src: "{{ openldap_server_ldif }}"
     dest: /tmp/
   register: result
@@ -87,7 +90,7 @@
     user: root
     cron_file: ldap_archive
     job: /usr/bin/db_checkpoint -1 && /usr/bin/db_archive -d -h /var/lib/ldap/{{ openldap_server_domain }}
-    minute: '30'
-    hour: '3'
-    weekday: '5'
+    minute: "{{ openldap_server_autoclean_cron.minute|default(omit) }}"
+    hour: "{{ openldap_server_autoclean_cron.hour|default(omit) }}"
+    weekday: "{{ openldap_server_autoclean_cron.weekday|default(omit) }}"
   when: openldap_server_autoclean

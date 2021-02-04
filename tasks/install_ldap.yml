@@ -1,13 +1,20 @@
 ---
-- name: Install the openldap and required Packages for Debian
+- name: Install the openldap and required packages
   apt:
     name:
       - slapd
       - ldap-utils
-      - python-selinux
       - openssl
       - db-util
     update_cache: true
+
+- name: Install the openldap and required packages for legacy distros
+  apt:
+    name:
+      - python-selinux
+  when:
+    - ansible_distribution == 'Ubuntu'
+    - ansible_distribution_major_version|int < 20
 
 - name: Install cron when needed
   apt:
@@ -46,6 +53,7 @@
       copy:
         content: '{{ _admin_pass_hash.stdout }}'
         dest: '{{ openldap_server_hash_path }}'
+        mode: 0600
       no_log: true
 
     - name: Set password hash variable
@@ -55,13 +63,19 @@
 
 - name: Copy the slapd.conf configuration file
   template:
+    mode: 0600
+    owner: "{{ openldap_server_user }}"
+    group: "{{ openldap_server_user }}"
     src: slapd.conf.j2
     dest: "{{ openldap_server_app_path }}/slapd.conf"
   notify: restart slapd
 
 - name: Copy the ldap.conf configuration file
   template:
+    mode: 0600
     src: ldap.conf.j2
+    owner: "{{ openldap_server_user }}"
+    group: "{{ openldap_server_user }}"
     dest: "{{ openldap_server_app_path }}/ldap.conf"
 
 - name: Add openldap user to root group (ssl keys access)
