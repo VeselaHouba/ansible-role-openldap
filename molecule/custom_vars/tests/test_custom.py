@@ -17,8 +17,17 @@ def test_ldap_service_is_running(host):
         assert host.service('slapd.service').is_running
 
 
-def test_ldap_cron(host):
-    cronfile = host.file("/etc/cron.d/ldap_archive")
-    assert cronfile.exists
-    assert cronfile.contains('/usr/bin/db_archive')
-    assert cronfile.contains('20 2')
+def test_domain_over_socket(host):
+    ls = host.run("ldapsearch -Y EXTERNAL -H ldapi:/// -b 'dc=example,dc=com'")
+    assert ls.rc == 0
+    assert '# numEntries: 1' in ls.stdout
+
+
+def test_domain_over_tcp(host):
+    ls = host.run(
+      "LDAPTLS_REQCERT=never ldapsearch -D " +
+      "'cn=root,dc=example,dc=com' -w passme -H ldaps://127.0.0.1:636 " +
+      "-b 'dc=example,dc=com'"
+    )
+    assert ls.rc == 0
+    assert '# numEntries: 1' in ls.stdout

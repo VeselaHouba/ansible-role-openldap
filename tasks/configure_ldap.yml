@@ -1,62 +1,10 @@
 ---
-- name: Create the directories for ldap domain
-  file:
-    path: "/var/lib/ldap/{{ openldap_server_domain }}/"
-    state: directory
-    mode: 0700
-    owner: "{{ openldap_server_user }}"
-    group: "{{ openldap_server_user }}"
-
-- block:
-    - name: Create the directory for ldap certificates
-      file:
-        path: "{{ openldap_server_app_path }}/certs/"
-        state: directory
-        mode: 0700
-        owner: "{{ openldap_server_user }}"
-        group: "{{ openldap_server_user }}"
-
-    - name: Generate the private key for certificate request
-      command: openssl genrsa -des3 -passout pass:password -out my1.key 1024
-      args:
-        chdir: "{{ openldap_server_app_path }}/certs/"
-        creates: "{{ openldap_server_app_path }}/certs/my1.key"
-      become: true
-      become_user: "{{ openldap_server_user }}"
-
-    - name: Strip the passphrase from the key
-      command: openssl rsa -in my1.key -passin pass:password -out my.key
-      args:
-        chdir: "{{ openldap_server_app_path }}/certs/"
-        creates: "{{ openldap_server_app_path }}/certs/my.key"
-      become: true
-      become_user: "{{ openldap_server_user }}"
-
-    - name: Create and sign the the new certificate
-      command: "openssl req -new -x509 -subj
-        '/C={{ openldap_server_country }}\
-        /ST={{ openldap_server_state }}\
-        /L={{ openldap_server_location }}\
-        /O={{ openldap_server_organization }}\
-        /CN={{ ansible_hostname }}/'
-        -days 3650 -key my.key -out cert.crt -extensions v3_ca"
-      args:
-        chdir: "{{ openldap_server_app_path }}/certs/"
-        creates: "{{ openldap_server_app_path }}/certs/cert.crt"
-      become: true
-      become_user: "{{ openldap_server_user }}"
-  when: openldap_server_generate_cert
-
-- name: copy the supporting files
-  copy:
-    src: slapd
+- name: Copy default config
+  template:
+    src: slapd.j2
     dest: /etc/default/slapd
     mode: 0755
-  when: openldap_server_enable_ssl
   notify: restart slapd
-
-- name: Force all handlers to execute now
-  meta: flush_handlers
 
 - name: Make sure slapd is enabled and running
   systemd:
@@ -64,33 +12,40 @@
     state: started
     enabled: true
 
-- name: Copy the template for creating base dn
-  template:
-    mode: 0600
-    src: "{{ openldap_server_ldif }}"
-    dest: /tmp/
-  register: result
+- name: Configure basedn as default suffix
+  community.general.ldap_attrs:
+    dn: olcDatabase={1}mdb,cn=config
+    attributes:
+      olcSuffix: "{{ _basedn }}"
+    state: exact
 
-- name: add the base domain
-  shell: >
-    ldapadd -x -D
-    "cn=Manager,
-    dc={{ openldap_server_domain.split('.')[0] }},
-    dc={{ openldap_server_domain.split('.')[1] }}"
-    -H ldapi:///
-    -w {{ openldap_server_rootpw }}
-    -f {{ result.dest|default(result.path) }} &&
-    touch {{ openldap_server_app_path }}/{{ openldap_server_domain }}_created
-  args:
-    creates: "{{ openldap_server_app_path }}/{{ openldap_server_domain }}_created"
+- name: Set up a root user
+  community.general.ldap_attrs:
+    dn: olcDatabase={1}mdb,cn=config
+    attributes:
+      olcRootDN: "cn=root,{{ _basedn }}"
+      olcRootPW: "{{ openldap_server_rootpw }}"
+    state: exact
 
-- name: Add regular cleaning
-  cron:
-    name: Removed unused ldap archives
-    user: root
-    cron_file: ldap_archive
-    job: /usr/bin/db_checkpoint -1 && /usr/bin/db_archive -d -h /var/lib/ldap/{{ openldap_server_domain }}
-    minute: "{{ openldap_server_autoclean_cron.minute|default(omit) }}"
-    hour: "{{ openldap_server_autoclean_cron.hour|default(omit) }}"
-    weekday: "{{ openldap_server_autoclean_cron.weekday|default(omit) }}"
-  when: openldap_server_autoclean
+- name: Set up the ACL
+  community.general.ldap_attrs:
+    dn: olcDatabase={1}mdb,cn=config
+    attributes:
+      olcAccess: "{{ openldap_olcAccess }}"
+    ordered: true
+    state: exact
+
+- name: Generate basedn
+  community.general.ldap_entry:
+    dn: "{{ _basedn }}"
+    objectClass: domain
+
+- name: Load encryption config
+  community.general.ldap_attrs:
+    dn: cn=config
+    attributes:
+      olcTLSCertificateKeyFile: "{{ openldap_server_ssl_key }}"
+      olcTLSCertificateFile: "{{ openldap_server_ssl_cert }}"
+    state: exact
+  when: openldap_server_enable_tls
+  notify: restart slapd

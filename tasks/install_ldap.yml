@@ -6,6 +6,7 @@
       - ldap-utils
       - openssl
       - db-util
+      - python3-ldap
     update_cache: true
 
 - name: Install the openldap and required packages for legacy distros
@@ -15,68 +16,6 @@
   when:
     - ansible_distribution == 'Ubuntu'
     - ansible_distribution_major_version|int < 20
-
-- name: Install cron when needed
-  apt:
-    name: cron
-  when: openldap_server_autoclean
-
-- name: Delete the configuration directory
-  file:
-    path: "{{ openldap_server_app_path }}/slapd.d"
-    state: absent
-
-- name: Check if administrator password hash exists
-  stat:
-    path: '{{ openldap_server_hash_path }}'
-  register: _openldap_server_hash_stat
-
-- block:
-    - name: Read hash of config administrator password
-      command: cat "{{ openldap_server_hash_path }}"
-      register: _admin_pass_hash
-      changed_when: false
-
-    - name: Set password hash variable
-      set_fact:
-        _password_hash: "{{ _admin_pass_hash.stdout }}"
-  when: _openldap_server_hash_stat.stat.exists
-
-- block:
-    - name: Generate config administrator password
-      command: slappasswd -s {{ openldap_server_rootpw }}
-      register: _admin_pass_hash
-      changed_when: false
-      no_log: true
-
-    - name: Save hash of config administrator password
-      copy:
-        content: '{{ _admin_pass_hash.stdout }}'
-        dest: '{{ openldap_server_hash_path }}'
-        mode: 0600
-      no_log: true
-
-    - name: Set password hash variable
-      set_fact:
-        _password_hash: "{{ _admin_pass_hash.stdout }}"
-  when: not _openldap_server_hash_stat.stat.exists
-
-- name: Copy the slapd.conf configuration file
-  template:
-    mode: 0600
-    owner: "{{ openldap_server_user }}"
-    group: "{{ openldap_server_user }}"
-    src: slapd.conf.j2
-    dest: "{{ openldap_server_app_path }}/slapd.conf"
-  notify: restart slapd
-
-- name: Copy the ldap.conf configuration file
-  template:
-    mode: 0600
-    src: ldap.conf.j2
-    owner: "{{ openldap_server_user }}"
-    group: "{{ openldap_server_user }}"
-    dest: "{{ openldap_server_app_path }}/ldap.conf"
 
 - name: Add openldap user to root group (ssl keys access)
   user:
