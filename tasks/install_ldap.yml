@@ -6,7 +6,7 @@
       - ldap-utils
       - openssl
       - db-util
-      - python3-ldap
+      - "{{ 'python3-ldap' if ansible_python_version is version('3','>=') else 'python-ldap' }}"
     update_cache: true
 
 - name: Install the openldap and required packages for legacy distros

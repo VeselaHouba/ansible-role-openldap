@@ -3,7 +3,7 @@ def main(ctx):
   use_hetzner = False
 
   docker_images = [
-    "ubuntu1604",
+#    "ubuntu1604",
     "ubuntu1804",
     "ubuntu2004",
     "debian9",
