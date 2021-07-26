@@ -23,7 +23,7 @@
   community.general.ldap_attrs:
     dn: olcDatabase={1}mdb,cn=config
     attributes:
-      olcRootDN: "cn=root,{{ _basedn }}"
+      olcRootDN: "{{ openldap_server_rootdn }}"
       olcRootPW: "{{ openldap_server_rootpw }}"
     state: exact
 

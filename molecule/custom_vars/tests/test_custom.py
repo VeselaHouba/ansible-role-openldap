@@ -26,7 +26,7 @@ def test_domain_over_socket(host):
 def test_domain_over_tcp(host):
     ls = host.run(
       "LDAPTLS_REQCERT=never ldapsearch -D " +
-      "'cn=root,dc=example,dc=com' -w passme -H ldaps://127.0.0.1:636 " +
+      "'cn=Manager,dc=example,dc=com' -w passme -H ldaps://127.0.0.1:636 " +
       "-b 'dc=example,dc=com'"
     )
     assert ls.rc == 0
