@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 if [ "${MOLECULE_IMAGE}" == "" ]; then
   echo "Variable MOLECULE_IMAGE not set, using default"
+  MOLECULE_IMAGE=geerlingguy/docker-debian10-ansible
 fi
+export MOLECULE_IMAGE
 
 docker \
   run \
@@ -14,7 +16,6 @@ docker \
   -e MOLECULE_IMAGE \
   -e MOLECULE_DOCKER_COMMAND \
   veselahouba/molecule  bash -c "
-  shellcheck_wrapper && \
   flake8 && \
   yamllint . && \
   ansible-lint && \
